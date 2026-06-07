@@ -25,7 +25,6 @@ let 屏蔽爬虫UA = ['netcraft'];
 
 // 根据主机名选择对应的上游地址
 function routeByHosts(host) {
-	// 定义路由表
 	const routes = {
 		// 生产环境
 		"quay": "quay.io",
@@ -42,6 +41,25 @@ function routeByHosts(host) {
 
 	if (host in routes) return [routes[host], false];
 	else return [hub_host, true];
+}
+
+// 根据路径前缀选择对应的 registry
+function routeByPath(pathname) {
+	const routes = {
+		"/ghcr.io": "ghcr.io",
+		"/gcr.io": "gcr.io",
+		"/k8s.gcr.io": "k8s.gcr.io",
+		"/registry.k8s.io": "registry.k8s.io",
+		"/quay.io": "quay.io",
+		"/docker.io": "registry-1.docker.io",
+	};
+
+	for (const prefix in routes) {
+		if (pathname === prefix || pathname.startsWith(prefix + '/')) {
+			return [routes[prefix], prefix];
+		}
+	}
+	return [null, null];
 }
 
 /** @type {RequestInit} */
@@ -443,8 +461,13 @@ export default {
 		const hostTop = hostname.split('.')[0]; // 获取主机名的第一部分
 
 		let checkHost; // 在这里定义 checkHost 变量
-		// 如果存在 ns 参数，优先使用它来确定 hub_host
-		if (ns) {
+		let pathHost;
+		let pathPrefix;
+		[pathHost, pathPrefix] = routeByPath(url.pathname);
+		if (pathHost) {
+			hub_host = pathHost;
+			url.pathname = url.pathname.replace(pathPrefix, '') || '/';
+		} else if (ns) {
 			if (ns === 'docker.io') {
 				hub_host = 'registry-1.docker.io'; // 设置上游地址为 registry-1.docker.io
 			} else {
@@ -455,7 +478,7 @@ export default {
 			hub_host = checkHost[0]; // 获取上游地址
 		}
 
-		const fakePage = checkHost ? checkHost[1] : false; // 确保 fakePage 不为 undefined
+		const fakePage = pathHost ? false : (checkHost ? checkHost[1] : false); // 确保 fakePage 不为 undefined
 		const auth_url = getAuthUrl(hub_host);
 		const tokenService = getTokenService(hub_host);
 		console.log(`域名头部: ${hostTop} 反代地址: ${hub_host} searchInterface: ${fakePage} auth_url: ${auth_url}`);
