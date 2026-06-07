@@ -2,8 +2,24 @@
 
 // Docker镜像仓库主机地址
 let hub_host = 'registry-1.docker.io';
-// Docker认证服务器地址
-const auth_url = 'https://auth.docker.io';
+
+const REGISTRY_AUTH_URL = {
+	'registry-1.docker.io': 'https://auth.docker.io',
+	'ghcr.io': 'https://ghcr.io',
+};
+
+const REGISTRY_TOKEN_SERVICE = {
+	'registry-1.docker.io': 'registry.docker.io',
+	'ghcr.io': 'ghcr.io',
+};
+
+function getAuthUrl(host) {
+	return REGISTRY_AUTH_URL[host] || 'https://auth.docker.io';
+}
+
+function getTokenService(host) {
+	return REGISTRY_TOKEN_SERVICE[host] || 'registry.docker.io';
+}
 
 let 屏蔽爬虫UA = ['netcraft'];
 
@@ -440,7 +456,9 @@ export default {
 		}
 
 		const fakePage = checkHost ? checkHost[1] : false; // 确保 fakePage 不为 undefined
-		console.log(`域名头部: ${hostTop} 反代地址: ${hub_host} searchInterface: ${fakePage}`);
+		const auth_url = getAuthUrl(hub_host);
+		const tokenService = getTokenService(hub_host);
+		console.log(`域名头部: ${hostTop} 反代地址: ${hub_host} searchInterface: ${fakePage} auth_url: ${auth_url}`);
 		// 更改请求的主机名
 		url.hostname = hub_host;
 		const hubParams = ['/v1/search', '/v1/repositories'];
@@ -498,7 +516,7 @@ export default {
 		if (url.pathname.includes('/token')) {
 			let token_parameter = {
 				headers: {
-					'Host': 'auth.docker.io',
+					'Host': new URL(auth_url).hostname,
 					'User-Agent': getReqHeader("User-Agent"),
 					'Accept': getReqHeader("Accept"),
 					'Accept-Language': getReqHeader("Accept-Language"),
@@ -535,7 +553,7 @@ export default {
 				repo = v2Match[1];
 			}
 			if (repo) {
-				const tokenUrl = `${auth_url}/token?service=registry.docker.io&scope=repository:${repo}:pull`;
+				const tokenUrl = `${auth_url}/token?service=${tokenService}&scope=repository:${repo}:pull`;
 				const tokenRes = await fetch(tokenUrl, {
 					headers: {
 						'User-Agent': getReqHeader("User-Agent"),
